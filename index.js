@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys')
+const { default: makeWASocket, useMultiFileAuthState, delay } = require('@whiskeysockets/baileys')
 const fs = require('fs')
 const cron = require('node-cron')
 
@@ -25,20 +25,19 @@ function getPatente(d){
 
 async function start(){
   const { state, saveCreds } = await useMultiFileAuthState('auth')
-  const sock = makeWASocket({ auth: state, browser: ["NoFap Bot","Chrome","1.0"] })
-
-  if(!sock.authState.creds.registered){
-    const numero = "55" + await new Promise(r=>{
-      const rl=require('readline').createInterface({input:process.stdin,output:process.stdout})
-      rl.question('Digite seu numero com DDD ex: 11999999999: ', a=>{rl.close(); r(a)})
-    })
-    setTimeout(async()=>{
-      const code = await sock.requestPairingCode(numero)
-      console.log("\n\n=== SEU CODIGO DE PAREAMENTO: "+code+" ===\nVai no WhatsApp > Aparelhos conectados > Conectar com numero de telefone\n\n")
-    }, 3000)
-  }
+  const sock = makeWASocket({ auth: state, browser: ["NoFap Bot","Chrome","1.0"], printQRInTerminal:false })
 
   sock.ev.on('creds.update', saveCreds)
+
+  if(!sock.authState.creds.registered){
+    const numero = process.env.PHONE
+    if(!numero){ console.log("ERRO: Defina a variavel PHONE no Render ex: 5511999999999"); return }
+    await delay(5000)
+    try{
+      const code = await sock.requestPairingCode(numero)
+      console.log(`\n\n==========================\nSEU CODIGO DE PAREAMENTO: ${code}\nVai no WhatsApp > Aparelhos conectados > Conectar com numero\n==========================\n\n`)
+    }catch(e){ console.log("Erro ao pedir codigo:", e) }
+  }
 
   sock.ev.on('messages.upsert', async ({messages})=>{
     const m=messages[0]
@@ -58,25 +57,24 @@ async function start(){
     if(texto=="!check"){
       const u=db[jid][sender]
       if(!u) return sock.sendMessage(jid,{text:"Você não tá na guerra! Digite!entrar"})
-      if(u.data==new Date().toDateString()) return sock.sendMessage(jid,{text:`${u.nome} você já fez check hoje! Volte amanhã.\nPatente atual: ${getPatente(u.dias)}`})
+      if(u.data==new Date().toDateString()) return sock.sendMessage(jid,{text:`${u.nome} você já fez check hoje!\nPatente: ${getPatente(u.dias)}`})
       u.dias++; u.data=new Date().toDateString(); salvar()
       return sock.sendMessage(jid,{text:`✅ CHECK DIA ${u.dias}\n${u.nome} agora é:\n${getPatente(u.dias)}\n\nContinue firme!`})
     }
     if(texto=="!recaida" || texto=="!recaída"){
       const u=db[jid][sender]; if(!u) return
       u.dias=0; u.data=""; salvar()
-      return sock.sendMessage(jid,{text:`💀 ${u.nome} teve recaída... voltou pro dia 0\nMas não desiste guerreiro! Digite!entrar pra voltar`})
+      return sock.sendMessage(jid,{text:`💀 ${u.nome} teve recaída... voltou pro dia 0\nDigite!entrar pra voltar`})
     }
     if(texto=="!rank" || texto=="!ranking"){
       let lista=Object.values(db[jid]).sort((a,b)=>b.dias-a.dias).slice(0,15)
-      let txt="🏆 RANKING NOFAP - SEPTEMBER EDITION 🏆\n\n"
+      let txt="🏆 RANKING NOFAP 🏆\n\n"
       lista.forEach((u,i)=> txt+=`${i+1}º ${u.nome} - ${u.dias}d - ${getPatente(u.dias)}\n`)
-      if(lista.length==0) txt+="Ninguém na guerra ainda. Digite!entrar"
+      if(lista.length==0) txt+="Ninguém ainda. Digite!entrar"
       return sock.sendMessage(jid,{text:txt})
     }
     if(texto=="!patentes"){
-      let txt="📜 PATENTES NOFAP\n\n1d - Soldado Porra 🪖\n2d - Cabo Pau de Bronze 🥉\n3-5d - Sargento Pau de Ferro 🪖\n6-10d - Marechal Punho Poderoso 🥇\n11-13d - Punho Prateado 🥈\n14-15d - Mão de Aço 💪\n16-20d - Quebrador de Correntes ⛓️‍💥\n21-23d - Guerreiro Anti-Porra 🛡️\n24d - Trucidador de Testículos 💀\n25d - Vara de Ferro 🗡️\n26d - O Inparavel, Incansavel 🥵\n27d - Cavaleiro da Espada Eterna 🤺\n28d - Ditador da Dureza 🎖️\n29d - Senhor do Sêmem 💧\n30d - Monge da Desova 🧘‍♂️"
-      return sock.sendMessage(jid,{text:txt})
+      return sock.sendMessage(jid,{text:"📜 PATENTES\n1d Soldado Porra 🪖\n2d Cabo Pau Bronze 🥉\n3-5d Sargento Pau Ferro 🪖\n6-10d Marechal Punho Poderoso 🥇\n11-13d Punho Prateado 🥈\n14-15d Mão de Aço 💪\n16-20d Quebrador de Correntes ⛓️‍💥\n21-23d Guerreiro Anti-Porra 🛡️\n24d Trucidador 💀\n25d Vara de Ferro 🗡️\n26d O Inparavel 🥵\n27d Cavaleiro Espada Eterna 🤺\n28d Ditador Dureza 🎖️\n29d Senhor do Sêmem 💧\n30d Monge da Desova 🧘‍♂️"})
     }
   })
 
